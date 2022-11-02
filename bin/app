@@ -1,0 +1,9 @@
+#! /usr/bin/env node
+"use strict";
+
+// Pass configuration to application
+require("../")({
+  port: 8000,
+  host: "localhost",
+  sequelize: require("../DataBase/connect")(),
+});
