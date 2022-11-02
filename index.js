@@ -6,6 +6,7 @@ const ejs = require("ejs");
 const pino = require("pino");
 const pinoHttp = require("pino-http");
 const cors = require("cors");
+const { default: helmet } = require("helmet");
 require("dotenv").config();
 
 module.exports = async function main(options, cb) {
@@ -64,7 +65,7 @@ module.exports = async function main(options, cb) {
   app.use(pinoHttp({ logger }));
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json());
-
+  app.use(helmet())
   // Register routes
   // @NOTE: require here because this ensures that even syntax errors
   // or other startup related errors are caught logged and debuggable.
