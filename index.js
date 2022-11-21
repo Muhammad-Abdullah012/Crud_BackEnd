@@ -59,13 +59,13 @@ module.exports = async function main(options, cb) {
   // app.use(/* ... */)
   app.use(
     cors({
-      origin: "http://localhost:3000",
+      origin: /^http:\/\/localhost:\d/,
     })
   );
   app.use(pinoHttp({ logger }));
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json());
-  app.use(helmet())
+  app.use(helmet());
   // Register routes
   // @NOTE: require here because this ensures that even syntax errors
   // or other startup related errors are caught logged and debuggable.
@@ -74,23 +74,30 @@ module.exports = async function main(options, cb) {
   // better because it works out of the box even in local development.
   require("./routes")(app, opts);
 
-  // app.get("/", (req, res) => {
-  //   res.json("Hello world")
-  // });
-
   // Common error handlers
 
-  // app.use(function fourOhFourHandler(req, res, next) {
-  //   next(httpErrors(404, `Route not found: ${req.url}`));
-  // });
   app.use(function fiveHundredHandler(err, req, res, next) {
     if (err.status >= 500) {
       logger.error(err);
     }
-    res.locals.name = "Backend_Crud";
+    res.locals.name = "crud_backend";
     res.locals.error = err;
     res.status(err.status || 500).render("error");
   });
+
+  app.use(function fourOhFourHandler(err, req, res, next) {
+    console.log(err);
+    if (err.status >= 400) {
+      logger.error(err);
+    }
+    res.locals.name = "crud_backend";
+    res.locals.error = err;
+    res.status(err.status || 400).render("error");
+  });
+
+  // app.use(function fourOhFourHandler(req, res, next) {
+  //   next(httpErrors(404, `Route not found: ${req.url}`));
+  // });
 
   // Start server
   server = app.listen(opts.port, opts.host, async function (err) {

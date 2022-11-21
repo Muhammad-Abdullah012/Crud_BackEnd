@@ -4,11 +4,10 @@ module.exports = async (app, opts) => {
   // require("./DataBase/DBoperations");
   const { createModels } = require("./DataBase/models");
   const userRoute = require("./routes/userRoute");
-  const rawUserRoutes = require("./routes/rawUserRoute");
+  const rawRoutes = require("./routes/rawRoutes");
 
   const { sequelize: seq } = opts;
   const sequelize = await seq;
-
   const { UserModel } = await createModels(sequelize);
   console.log("userMOdel is: ", UserModel);
 
@@ -27,6 +26,6 @@ module.exports = async (app, opts) => {
       req.locals = { sequelize };
       next();
     },
-    rawUserRoutes
+    rawRoutes
   );
 };
