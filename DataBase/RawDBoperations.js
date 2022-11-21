@@ -9,6 +9,10 @@ const {
 } = require("./constants");
 
 // OR address LIKE :searchString OR profession LIKE :searchString`,
+const userTableCols = `${USER_TABLE}.id, ${USER_TABLE}.name, age, ${USER_TABLE}.address, ${USER_TABLE}.profession`;
+const orderTableCols = `${ORDERS_TABLE}.name, ${ORDERS_TABLE}.quantity, ${ORDERS_TABLE}.id`;
+const orgTableCols = `${ORG_TABLE}.name AS org_name, ${ORDERS_TABLE}.id AS org_id`;
+const orgToUsersTableCols = `${ORG_TO_USERS}.user_id, ${ORG_TO_USERS}.org_id AS org_table_id`;
 
 const createUsersView = async (sequelize) => {
   await sequelize.query(`DROP VIEW IF EXISTS users_view`);
@@ -25,7 +29,7 @@ const createOrdersView = async (sequelize) => {
 
 const getAllUsers = async (sequelize, searchString) => {
   const query = ` WHERE LOWER(name) LIKE LOWER(:searchString) OR LOWER(address) LIKE LOWER(:searchString) OR LOWER(profession) LIKE LOWER(:searchString) OR CAST(age AS TEXT) LIKE :searchString`;
-  const query2 = ` WHERE LOWER(org_name) LIKE LOWER(:searchString)`;
+  const query2 = ` OR LOWER(org_name) LIKE LOWER(:searchString)`;
   const [results, metadata] = await sequelize.query(
     `SELECT * FROM users_view ${searchString ? query + query2 : ``}`,
     {
@@ -34,6 +38,18 @@ const getAllUsers = async (sequelize, searchString) => {
       },
     }
   );
+  // const [results, metadata] = await sequelize.query(
+  //   `SELECT ${userTableCols}, ${orgTableCols}, ${orgToUsersTableCols} FROM ( SELECT * FROM ${USER_TABLE} ${
+  //     searchString ? query : ``
+  //   }) a INNER JOIN (SELECT * FROM ${ORG_TABLE} ${
+  //     searchString ? query2 : ``
+  //   }) b ON ${ORG_TABLE}.id = ${ORG_TO_USERS}.org_id INNER JOIN (SELECT * FROM ${ORG_TO_USERS}) c ON ${USER_TABLE}.id = ${ORG_TO_USERS}.user_id`,
+  //   {
+  //     replacements: {
+  //       searchString: `%${searchString}%`,
+  //     },
+  //   }
+  // );
 
   return results;
 };
