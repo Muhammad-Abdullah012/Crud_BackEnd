@@ -8,11 +8,6 @@ const {
   USERS_VIEW,
 } = require("./constants");
 
-// OR address LIKE :searchString OR profession LIKE :searchString`,
-const userTableCols = `${USER_TABLE}.id, ${USER_TABLE}.name, age, ${USER_TABLE}.address, ${USER_TABLE}.profession`;
-const orderTableCols = `${ORDERS_TABLE}.name, ${ORDERS_TABLE}.quantity, ${ORDERS_TABLE}.id`;
-const orgTableCols = `${ORG_TABLE}.name AS org_name, ${ORDERS_TABLE}.id AS org_id`;
-const orgToUsersTableCols = `${ORG_TO_USERS}.user_id, ${ORG_TO_USERS}.org_id AS org_table_id`;
 
 const createUsersView = async (sequelize) => {
   await sequelize.query(`DROP VIEW IF EXISTS users_view`);
@@ -28,28 +23,18 @@ const createOrdersView = async (sequelize) => {
 };
 
 const getAllUsers = async (sequelize, searchString) => {
-  const query = ` WHERE LOWER(name) LIKE LOWER(:searchString) OR LOWER(address) LIKE LOWER(:searchString) OR LOWER(profession) LIKE LOWER(:searchString) OR CAST(age AS TEXT) LIKE :searchString`;
-  const query2 = ` OR LOWER(org_name) LIKE LOWER(:searchString)`;
+  const query = ` WHERE LOWER(u.name) LIKE LOWER(:searchString) OR LOWER(u.address) LIKE LOWER(:searchString) OR LOWER(profession) LIKE LOWER(:searchString) OR CAST(age AS TEXT) LIKE :searchString OR LOWER(org.name) LIKE LOWER(:searchString)`;
+  
   const [results, metadata] = await sequelize.query(
-    `SELECT * FROM users_view ${searchString ? query + query2 : ``}`,
+    `SELECT u.id, u.name, u.address, u.profession, u.age, o_to_u.org_id, org.name AS org_name FROM ${USER_TABLE} AS u INNER JOIN organizations_to_users AS o_to_u ON o_to_u.user_id = u.id INNER JOIN ${ORG_TABLE} AS org ON org.id = o_to_u.org_id ${
+      searchString ? query : ``
+    };`,
     {
       replacements: {
         searchString: `%${searchString}%`,
       },
     }
   );
-  // const [results, metadata] = await sequelize.query(
-  //   `SELECT ${userTableCols}, ${orgTableCols}, ${orgToUsersTableCols} FROM ( SELECT * FROM ${USER_TABLE} ${
-  //     searchString ? query : ``
-  //   }) a INNER JOIN (SELECT * FROM ${ORG_TABLE} ${
-  //     searchString ? query2 : ``
-  //   }) b ON ${ORG_TABLE}.id = ${ORG_TO_USERS}.org_id INNER JOIN (SELECT * FROM ${ORG_TO_USERS}) c ON ${USER_TABLE}.id = ${ORG_TO_USERS}.user_id`,
-  //   {
-  //     replacements: {
-  //       searchString: `%${searchString}%`,
-  //     },
-  //   }
-  // );
 
   return results;
 };
@@ -67,10 +52,12 @@ const getAllOrganizations = async (sequelize, searchString) => {
   return results;
 };
 const getAllOrders = async (sequelize, searchString) => {
-  // await createOrdersView(sequelize);
-  const query = ` WHERE LOWER(user_name) LIKE LOWER(:searchString) OR LOWER(name) LIKE LOWER(:searchString) OR CAST(quantity AS TEXT) LIKE :searchString`;
+  const query = ` WHERE LOWER(u.name) LIKE LOWER(:searchString) OR LOWER(ord.name) LIKE LOWER(:searchString) OR CAST(quantity AS TEXT) LIKE :searchString`;
+  
   const [results, metadata] = await sequelize.query(
-    `SELECT * FROM ${ORDERS_VIEW} ${searchString ? query : ``}`,
+    `SELECT ord.id, ord.name, ord.quantity, ord.user_id, u.name AS user_name FROM ${ORDERS_TABLE} AS ord INNER JOIN ${USER_TABLE} AS u ON u.id = ord.user_id ${
+      searchString ? query : ``
+    };`,
     {
       replacements: {
         searchString: `%${searchString}%`,
@@ -138,7 +125,7 @@ const addUser = async (sequelize, user) => {
           },
         }
       );
-      const [orgResult, orgMetaData] = await sequelize.query(
+      await sequelize.query(
         `INSERT INTO ${ORG_TO_USERS} (user_id, org_id) VALUES (:user_id, :org_id)`,
         {
           transaction: t,
@@ -196,7 +183,6 @@ const addOrganization = async (sequelize, org) => {
   return results[0];
 };
 
-//name=:name, age=:age, address=:address, profession=:profession
 const updateUser = async (sequelize, user) => {
   try {
     const res = await sequelize.transaction(async (t) => {
@@ -301,13 +287,31 @@ const deleteUser = async (sequelize, id) => {
 
 const deleteOrganization = async (sequelize, id) => {
   if (!id) return null;
-
-  await sequelize.query(`DELETE FROM ${ORG_TABLE} WHERE id=:id`, {
-    replacements: {
-      id,
-    },
-  });
-  return SUCCESS;
+  try {
+    // First delete users from this organization, then delete organization
+    const result = await sequelize.transaction(async (t) => {
+      await sequelize.query(
+        `DELETE FROM users WHERE id IN (SELECT user_id FROM ${ORG_TO_USERS} WHERE org_id=:id)`,
+        {
+          transaction: t,
+          replacements: {
+            id,
+          },
+        }
+      );
+      await sequelize.query(`DELETE FROM ${ORG_TABLE} WHERE id=:id`, {
+        transaction: t,
+        replacements: {
+          id,
+        },
+      });
+      return SUCCESS;
+    });
+    return result;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
 };
 const deleteOrder = async (sequelize, id) => {
   if (!id) return null;
